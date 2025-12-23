@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 활용 스토리라인 워크시트</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script>
+        let state = {
+            responses: {},
+            expandedSections: {
+                step0: true,
+                step1: true,
+                step2: true,
+                step3: true,
+                step4: true,
+                step5: true,
+                step6: true,
+                aiAnalysis: true
+            },
+            copiedPrompt: null,
+            saved: false,
+            aiAnalysisResult: null,
+            isAnalyzing: false
+        };
+
+        function loadFromStorage() {
+            const saved = sessionStorage.getItem('worksheet_responses');
+            if (saved) {
+                state.responses = JSON.parse(saved);
+            }
+            const savedAnalysis = sessionStorage.getItem('worksheet_analysis');
+            if (savedAnalysis) {
+                state.aiAnalysisResult = JSON.parse(savedAnalysis);
+            }
+        }
+
+        function saveToStorage() {
+            sessionStorage.setItem('worksheet_responses', JSON.stringify(state.responses));
+            if (state.aiAnalysisResult) {
+                sessionStorage.setItem('worksheet_analysis', JSON.stringify(state.aiAnalysisResult));
+            }
+        }
+
+        function handleInputChange(field, value) {
+            state.responses[field] = value;
+            saveToStorage();
+        }
+
+        function toggleSection(section) {
+            state.expandedSections[section] = !state.expandedSections[section];
+            render();
+        }
+
+        function copyPromptByField(field) {
+            const promptElement = document.querySelector(`pre[data-prompt="${field}"]`);
+            if (!promptElement) return;
+            
+            const promptText = promptElement.textContent;
+            const userContent = state.responses[field] || '[여기에 작성한 내용을 붙여넣으세요]';
+            const fullPrompt = promptText + '\n\n[내가 작성한 내용]\n' + userContent;
+            
+            navigator.clipboard.writeText(fullPrompt).then(() => {
+                state.copiedPrompt = field;
+                render();
+                setTimeout(() => {
+                    state.copiedPrompt = null;
+                    render();
+                }, 2000);
+            }).catch(() => {
+                alert('복사에 실패했습니다. 다시 시도해주세요.');
+            });
+        }
+
+        function getProgress() {
+            const totalFields = 13;
+            const filledFields = Object.values(state.responses).filter(v => v && v.trim()).length;
+            const percentage = Math.round((filledFields / totalFields) * 100);
+            return Math.min(percentage, 100);
+        }
+
+        function showSaved() {
+            state.saved = true;
+            render();
+            setTimeout(() => {
+                state.saved = false;
+                render();
+            }, 2000);
+        }
+
+        function downloadWorksheet() {
+            const content = '\uFEFF' + `AI 활용 스토리라인 워크시트 - 작성 내용
+==========================================
+
+[STEP 1] 나는 어떻게 살아왔는가
+------------------------------
+관심의 시작 계기: ${state.responses.step1_interest || ''}
+힘들었지만 계속했던 이유: ${state.responses.step1_reason || ''}
+나의 성향/태도 키워드: ${state.responses.step1_attitude || ''}
+
+[STEP 2] 어떤 선택을 해왔는가
+------------------------------
+고민했던 선택지: ${state.responses.step2_options || ''}
+선택 기준: ${state.responses.step2_criteria || ''}
+지금 방향을 택한 이유: ${state.responses.step2_reason || ''}
+
+[STEP 3] 무엇을 해왔는가
+------------------------------
+프로젝트명: ${state.responses.step3_project || ''}
+나의 역할: ${state.responses.step3_role || ''}
+문제 상황: ${state.responses.step3_problem || ''}
+해결 과정: ${state.responses.step3_solution || ''}
+결과/배운 점: ${state.responses.step3_result || ''}
+
+[STEP 4] 부족한 점과 성장 노력
+------------------------------
+부족하다고 느낀 점: ${state.responses.step4_weakness || ''}
+계기: ${state.responses.step4_trigger || ''}
+현재의 노력: ${state.responses.step4_effort || ''}
+
+[STEP 5] 앞으로의 방향
+------------------------------
+관심 기업/분야: ${state.responses.step5_company || ''}
+인상 깊은 이유: ${state.responses.step5_impression || ''}
+연결 가능한 나의 경험: ${state.responses.step5_connection || ''}
+`;
+
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '스토리라인_워크시트_작성내용.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function render() {
+            const progress = getProgress();
+            
+            document.getElementById('app').innerHTML = `
+                <div class="bg-blue-600 text-white p-6 sticky top-0 z-10 shadow-md">
+                    <div class="max-w-4xl mx-auto">
+                        <h1 class="text-3xl font-bold mb-2">AI 활용 스토리라인 워크시트</h1>
+                        <p class="text-blue-100">자기소개서와 면접을 위한 나만의 스토리 정리</p>
+                        <div class="mt-4 flex items-center gap-4">
+                            <div class="flex-1 bg-blue-700 rounded-full h-3">
+                                <div class="bg-yellow-400 h-3 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
+                            </div>
+                            <span class="text-sm font-semibold">${progress}%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="max-w-4xl mx-auto p-6 space-y-6 pb-32">
+                    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-6 rounded-r-lg">
+                        <p class="text-gray-800 font-semibold mb-2">⚠️ 중요: AI는 생각을 대신해주지 않습니다</p>
+                        <p class="text-gray-700">먼저 <strong>내 경험을 적고</strong>, 그 다음에 <strong>AI로 정리·보완</strong>합니다.</p>
+                    </div>
+
+                    ${renderSection('step0', 'STEP 0. 워크시트 사용 방법', '', `
+                        <div class="space-y-3 text-gray-700">
+                            <div class="flex items-start gap-3">
+                                <span class="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-semibold text-sm">1</span>
+                                <p>각 질문에 대해 <strong>핵심 키워드 위주로 직접 작성</strong>하세요.</p>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-semibold text-sm">2</span>
+                                <p>문장이 완벽하지 않아도 괜찮습니다.</p>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-semibold text-sm">3</span>
+                                <p>작성 후 제시된 <strong>AI 프롬프트</strong>를 활용해 정리·확장합니다.</p>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-semibold text-sm">4</span>
+                                <p>AI 결과물을 그대로 쓰지 말고, <strong>내 경험과 맞는지 반드시 검증</strong>하세요.</p>
+                            </div>
+                        </div>
+                    `)}
+
+                    ${renderStep1()}
+                    ${renderStep2()}
+                    ${renderStep3()}
+                    ${renderStep4()}
+                    ${renderStep5()}
+                    ${renderStep6()}
+
+                    <div class="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-8 rounded-lg">
+                        <h3 class="text-2xl font-bold mb-4">마무리 메시지</h3>
+                        <p class="text-lg mb-4">자기소개서는 AI가 도와줄 수 있습니다.</p>
+                        <p class="text-lg mb-4">하지만 <strong>면접에서 나를 대신 말해줄 수는 없습니다.</strong></p>
+                        <p class="text-lg">이 워크시트는 '글을 잘 쓰기 위한 자료'가 아니라,<br>
+                        <strong>면접에서 흔들리지 않기 위한 준비 과정</strong>입니다.</p>
+                    </div>
+
+                    ${renderAIAnalysisSection()}
+                </div>
+
+                <div class="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 p-4 shadow-lg">
+                    <div class="max-w-4xl mx-auto flex gap-4">
+                        <button onclick="showSaved()" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors font-semibold">
+                            ${state.saved ? 
+                                '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> 저장됨!' :
+                                '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> 진행상황 저장'
+                            }
+                        </button>
+                        <button onclick="downloadWorksheet()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors font-semibold">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            작성내용 다운로드
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            attachEventListeners();
+        }
+
+        function renderSection(id, title, subtitle, content) {
+            const expanded = state.expandedSections[id];
+            return `
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <button onclick="toggleSection('${id}')" class="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors text-left">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800">${title}</h2>
+                            ${subtitle ? `<p class="text-blue-600 mt-1">${subtitle}</p>` : ''}
+                        </div>
+                        ${expanded ? 
+                            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>' :
+                            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>'
+                        }
+                    </button>
+                    ${expanded ? `<div class="p-6 pt-0 border-t">${content}</div>` : ''}
+                </div>
+            `;
+        }
+
+        function renderTextArea(label, field, placeholder) {
+            const value = (state.responses[field] || '').replace(/"/g, '&quot;');
+            return `
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">${label}</label>
+                    <textarea 
+                        data-field="${field}"
+                        placeholder="${placeholder}"
+                        class="w-full p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-y"
+                        style="min-height: 96px;"
+                        rows="4"
+                    >${state.responses[field] || ''}</textarea>
+                </div>
+            `;
+        }
+
+        function renderPromptBox(promptText, field) {
+            const copied = state.copiedPrompt === field;
+            return `
+                <div class="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
+                    <div class="flex items-start justify-between mb-3">
+                        <p class="font-semibold text-gray-700">🤖 AI 활용 프롬프트</p>
+                        <button 
+                            onclick="copyPromptByField('${field}')"
+                            class="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold ${
+                                copied 
+                                    ? 'bg-green-600 text-white' 
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            }"
+                        >
+                            ${copied ?
+                                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> 복사됨!' :
+                                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> 복사하기'
+                            }
+                        </button>
+                    </div>
+                    <pre class="text-sm text-gray-700 whitespace-pre-wrap font-mono bg-white p-3 rounded border border-gray-200" data-prompt="${field}">${promptText}</pre>
+                </div>
+            `;
+        }
+
+        function renderStep1() {
+            return renderSection('step1', 'STEP 1. 나는 어떻게 살아왔는가', '태도·동기 영역', `
+                <div class="space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="font-semibold text-gray-800 mb-2">✍ 스스로에게 묻는 질문</p>
+                        <ul class="space-y-2 text-gray-700">
+                            <li>• 게임/콘텐츠 분야에 관심을 갖게 된 계기는 무엇이었나요?</li>
+                            <li>• 그 과정에서 포기하지 않고 계속 해오게 만든 이유는 무엇인가요?</li>
+                            <li>• 목표를 세웠을 때, 보통 어떤 태도로 접근해왔나요?</li>
+                        </ul>
+                    </div>
+                    ${renderTextArea('관심의 시작 계기', 'step1_interest', '예: 대학교 때 동아리에서 처음 게임 개발을 해보고...')}
+                    ${renderTextArea('힘들었지만 계속했던 이유', 'step1_reason', '예: 완성된 게임을 보는 순간의 성취감...')}
+                    ${renderTextArea('나의 성향 / 태도 키워드', 'step1_attitude', '예: 꼼꼼함, 끈기, 호기심...')}
+                </div>
+            `);
+        }
+
+        function renderStep2() {
+            return renderSection('step2', 'STEP 2. 어떤 선택을 해왔는가', '방향성·판단 영역', `
+                <div class="space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="font-semibold text-gray-800 mb-2">✍ 스스로에게 묻는 질문</p>
+                        <ul class="space-y-2 text-gray-700">
+                            <li>• 게임 분야 중에서도 내가 선택한 직무는 무엇인가요?</li>
+                            <li>• 다른 선택지(전공, 직무, 진로)를 고민했던 적이 있나요?</li>
+                            <li>• 최종적으로 지금의 방향을 선택한 기준은 무엇이었나요?</li>
+                        </ul>
+                    </div>
+                    ${renderTextArea('고민했던 선택지', 'step2_options', '예: 게임 개발 vs 기획...')}
+                    ${renderTextArea('선택 기준', 'step2_criteria', '예: 내가 가장 몰입할 수 있는 작업...')}
+                    ${renderTextArea('지금 방향을 택한 이유', 'step2_reason', '예: 게임 개발 과정에서 캐릭터의 움직임을 구현하는 게 가장 재미있었고...')}
+                </div>
+            `);
+        }
+
+        function renderStep3() {
+            return renderSection('step3', 'STEP 3. 무엇을 해왔는가', '경험·전문성 영역', `
+                <div class="space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="font-semibold text-gray-800 mb-2">✍ 스스로에게 묻는 질문</p>
+                        <ul class="space-y-2 text-gray-700">
+                            <li>• 가장 기억에 남는 프로젝트/작업은 무엇인가요?</li>
+                            <li>• 그 작업에서 내가 맡은 역할은 무엇이었나요?</li>
+                            <li>• 작업 중 겪었던 문제와 해결 과정은 무엇이었나요?</li>
+                            <li>• 그 경험 이후 달라진 점은 무엇인가요?</li>
+                        </ul>
+                    </div>
+                    ${renderTextArea('프로젝트명', 'step3_project', '예: 학과 졸업 작품 - 게임 프로젝트 개발')}
+                    ${renderTextArea('나의 역할', 'step3_role', '예: 게임플레이 시스템 개발 전담, UI/UX 개발, 엔진 흐름 제어...')}
+                    ${renderTextArea('문제 상황', 'step3_problem', '예: 구조의 유지 보수성에 대한 아쉬움...')}
+                    ${renderTextArea('해결 과정', 'step3_solution', '예: AI를 Behavior Tree + Custom Task로 분리하여 확장성 있는 구조로 개선...')}
+                    ${renderTextArea('결과 / 배운 점', 'step3_result', '예: 단순 구현을 넘어 설계, 확장, 유지 보수를 고려하는 사고방식의 중요성을 배움...')}
+                </div>
+            `);
+        }
+
+        function renderStep4() {
+            return renderSection('step4', 'STEP 4. 부족한 점과 성장 노력', '자기인식 영역', `
+                <div class="space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="font-semibold text-gray-800 mb-2">✍ 스스로에게 묻는 질문</p>
+                        <ul class="space-y-2 text-gray-700">
+                            <li>• 스스로 부족하다고 느끼는 부분은 무엇인가요?</li>
+                            <li>• 그 약점을 인지하게 된 계기는 무엇이었나요?</li>
+                            <li>• 현재 어떤 방식으로 보완하고 있나요?</li>
+                        </ul>
+                    </div>
+                    ${renderTextArea('부족하다고 느낀 점', 'step4_weakness', '예: 개인 작업에 집중하다 보니 협업 과정에서 소통이 부족...')}
+                    ${renderTextArea('계기', 'step4_trigger', '예: 구현 기능의 의도가 잘 전달되지 않아, 팀원이 다른 방향으로 수정하는 일이 발생...')}
+                    ${renderTextArea('현재의 노력', 'step4_effort', '예: 개발 결과보다 과정 공유의 필요성을 인식...')}
+                </div>
+            `);
+        }
+
+        function renderStep5() {
+            return renderSection('step5', 'STEP 5. 앞으로의 방향', '지원동기·면접 연결 영역', `
+                <div class="space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="font-semibold text-gray-800 mb-2">✍ 스스로에게 묻는 질문</p>
+                        <ul class="space-y-2 text-gray-700">
+                            <li>• 내가 지원하고 싶은 회사/분야는 어디인가요?</li>
+                            <li>• 그 회사의 콘텐츠 또는 작업 방식에서 인상 깊었던 점은 무엇인가요?</li>
+                            <li>• 내 경험 중, 해당 회사에서 활용될 수 있는 부분은 무엇인가요?</li>
+                        </ul>
+                    </div>
+                    ${renderTextArea('관심 기업/분야', 'step5_company', '예: IP 기반 게임 개발 기업, 라이브 서비스 중심 게임 기업...')}
+                    ${renderTextArea('인상 깊은 이유', 'step5_impression', '예: 스토리텔링, 기획 의도가 느껴지는 시스템 설계, 유저 피드백...')}
+                    ${renderTextArea('연결 가능한 나의 경험', 'step5_connection', '예: 팀 프로젝트 중 유저 테스트 피드백 반영 경험, 기능 구현 후 플레이 흐름을 점검한 경험...')}
+                </div>
+            `);
+        }
+
+        function renderStep6() {
+            return renderSection('step6', 'STEP 6. 면접 대비 점검 질문', '필수 체크', `
+                <div class="bg-red-50 p-6 rounded-lg border-l-4 border-red-500">
+                    <p class="font-semibold text-gray-800 mb-4">아래 질문에 <strong>말로 대답할 수 있는지</strong> 꼭 확인하세요</p>
+                    <div class="space-y-3 text-gray-700">
+                        <div class="flex items-start gap-3">
+                            <span class="text-red-600">✓</span>
+                            <p>이 내용, 면접에서 바로 설명할 수 있는가?</p>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-red-600">✓</span>
+                            <p>AI가 써준 문장을 빼도, 내 말로 설명 가능한가?</p>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-red-600">✓</span>
+                            <p>"왜?"라는 질문을 2~3번 받아도 흔들리지 않는가?</p>
+                        </div>
+                    </div>
+                </div>
+            `);
+        }
+
+        function attachEventListeners() {
+            const textareas = document.querySelectorAll('textarea[data-field]');
+            textareas.forEach(textarea => {
+                textarea.addEventListener('input', function(e) {
+                    const field = this.getAttribute('data-field');
+                    handleInputChange(field, this.value);
+                });
+            });
+        }
+
+        async function analyzeWithAI() {
+            const filledFields = Object.values(state.responses).filter(v => v && v.trim()).length;
+            
+            if (filledFields < 5) {
+                alert('최소 5개 이상의 항목을 작성해주세요.');
+                return;
+            }
+
+            state.isAnalyzing = true;
+            state.aiAnalysisResult = null;
+            render();
+
+            const prompt = `다음은 취업 준비생이 작성한 자기분석 워크시트 내용입니다. 각 STEP별 지침에 따라 내용을 분석하고, 일관된 스토리라인을 만들어주세요.
+
+[STEP 1 분석] 나는 어떻게 살아왔는가
+내용:
+- 관심의 시작 계기: ${state.responses.step1_interest || '(작성 안 함)'}
+- 힘들었지만 계속했던 이유: ${state.responses.step1_reason || '(작성 안 함)'}
+- 나의 성향/태도 키워드: ${state.responses.step1_attitude || '(작성 안 함)'}
+
+분석 방법: 내가 적은 경험을 바탕으로, 1) 관심의 시작 2) 지속하게 만든 동기 3) 나의 태도를 인사담당자가 이해하기 쉽게 요약해줘. 미사여구는 빼고, 현실적인 표현으로 정리해줘.
+
+---
+
+[STEP 2 분석] 어떤 선택을 해왔는가
+내용:
+- 고민했던 선택지: ${state.responses.step2_options || '(작성 안 함)'}
+- 선택 기준: ${state.responses.step2_criteria || '(작성 안 함)'}
+- 지금 방향을 택한 이유: ${state.responses.step2_reason || '(작성 안 함)'}
+
+분석 방법: 내가 고민했던 여러 선택지를 비교해서, 왜 현재의 직무 방향을 선택했는지 논리적으로 정리해줘. 면접에서 설명할 수 있는 수준으로 정리해줘.
+
+---
+
+[STEP 3 분석] 무엇을 해왔는가
+내용:
+- 프로젝트명: ${state.responses.step3_project || '(작성 안 함)'}
+- 나의 역할: ${state.responses.step3_role || '(작성 안 함)'}
+- 문제 상황: ${state.responses.step3_problem || '(작성 안 함)'}
+- 해결 과정: ${state.responses.step3_solution || '(작성 안 함)'}
+- 결과/배운 점: ${state.responses.step3_result || '(작성 안 함)'}
+
+분석 방법: 아래 경험을 Situation / Task / Action / Result 구조로 정리해줘. 신입 지원자 관점에서 강점이 잘 드러나게 정리해줘.
+
+---
+
+[STEP 4 분석] 부족한 점과 성장 노력
+내용:
+- 부족하다고 느낀 점: ${state.responses.step4_weakness || '(작성 안 함)'}
+- 계기: ${state.responses.step4_trigger || '(작성 안 함)'}
+- 현재의 노력: ${state.responses.step4_effort || '(작성 안 함)'}
+
+분석 방법: 이 경험을 바탕으로 약점을 인식하고 개선 중인 사례로 정리해줘. 변명처럼 보이지 않도록 주의해서 정리해줘.
+
+---
+
+[STEP 5 분석] 앞으로의 방향
+내용:
+- 관심 기업/분야: ${state.responses.step5_company || '(작성 안 함)'}
+- 인상 깊은 이유: ${state.responses.step5_impression || '(작성 안 함)'}
+- 연결 가능한 나의 경험: ${state.responses.step5_connection || '(작성 안 함)'}
+
+분석 방법: 이 회사의 특징과 내 경험을 연결해서 신입 지원자용 지원동기 초안을 만들어줘. 과장된 표현은 피하고, 실무 관점에서 정리해줘.
+
+---
+
+**최종 출력 형식:**
+
+## 📋 STEP 1: 나는 어떻게 살아왔는가
+[분석 내용]
+
+## 📋 STEP 2: 어떤 선택을 해왔는가
+[분석 내용]
+
+## 📋 STEP 3: 무엇을 해왔는가
+[STAR 구조로 정리된 내용]
+
+## 📋 STEP 4: 부족한 점과 성장 노력
+[분석 내용]
+
+## 📋 STEP 5: 앞으로의 방향
+[지원동기 초안]
+
+## 🎯 통합 스토리라인
+위 내용들을 하나의 일관된 흐름으로 연결하여, 자기소개서에 활용할 수 있는 완성된 스토리라인을 3-4문단으로 작성해줘. 각 STEP이 자연스럽게 연결되도록 구성해줘.
+
+## 💡 스토리라인 개선 제안
+- 현재 스토리의 강점 (2-3가지)
+- 보완이 필요한 부분 (2-3가지)
+- 면접에서 예상되는 질문 (3가지)`;
+
+            try {
+                const response = await fetch("https://api.anthropic.com/v1/messages", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        model: "claude-sonnet-4-20250514",
+                        max_tokens: 4000,
+                        messages: [
+                            { role: "user", content: prompt }
+                        ],
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.content && data.content[0] && data.content[0].text) {
+                    state.aiAnalysisResult = data.content[0].text;
+                    saveToStorage();
+                } else {
+                    state.aiAnalysisResult = "분석 중 오류가 발생했습니다. 다시 시도해주세요.";
+                }
+            } catch (error) {
+                state.aiAnalysisResult = "네트워크 오류가 발생했습니다. 인터넷 연결을 확인하고 다시 시도해주세요.";
+            }
+
+            state.isAnalyzing = false;
+            render();
+            
+            setTimeout(() => {
+                const analysisSection = document.getElementById('ai-analysis-section');
+                if (analysisSection) {
+                    analysisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        }
+
+        function renderAIAnalysisSection() {
+            return `
+                <div id="ai-analysis-section" class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="p-6 bg-gradient-to-r from-purple-600 to-blue-600">
+                        <h2 class="text-2xl font-bold text-white mb-2">🤖 AI 종합 분석</h2>
+                        <p class="text-purple-100">작성한 내용을 AI가 분석하고 자기소개서·면접 전략을 제안합니다</p>
+                    </div>
+                    <div class="p-6">
+                        ${state.isAnalyzing ? `
+                            <div class="flex flex-col items-center justify-center py-12">
+                                <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mb-4"></div>
+                                <p class="text-gray-600 font-semibold">AI가 분석 중입니다...</p>
+                                <p class="text-gray-500 text-sm mt-2">30초 정도 소요될 수 있습니다</p>
+                            </div>
+                        ` : state.aiAnalysisResult ? `
+                            <div class="prose max-w-none">
+                                <div class="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
+                                    <p class="text-green-800 font-semibold">✅ 분석 완료!</p>
+                                    <p class="text-green-700 text-sm mt-1">아래 내용을 참고하되, 반드시 본인의 실제 경험과 비교하며 검증하세요.</p>
+                                </div>
+                                <div class="bg-gray-50 p-6 rounded-lg whitespace-pre-wrap text-gray-800 leading-relaxed">
+${state.aiAnalysisResult}
+                                </div>
+                                <div class="mt-6 flex gap-3">
+                                    <button onclick="analyzeWithAI()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors">
+                                        🔄 다시 분석하기
+                                    </button>
+                                    <button onclick="copyAnalysisResult()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors">
+                                        💾 분석 결과 저장
+                                    </button>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="text-center py-8">
+                                <div class="mb-6">
+                                    <svg class="mx-auto h-24 w-24 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-xl font-bold text-gray-800 mb-2">작성 완료 후 AI 분석을 받아보세요</h3>
+                                <p class="text-gray-600 mb-6">최소 5개 이상의 항목을 작성하면 AI가 종합적으로 분석해드립니다</p>
+                                <button 
+                                    onclick="analyzeWithAI()"
+                                    class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-4 px-8 rounded-lg font-bold text-lg transition-all transform hover:scale-105 shadow-lg"
+                                >
+                                    ✨ AI에게 종합 분석 받기
+                                </button>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function copyAnalysisResult() {
+            if (!state.aiAnalysisResult) return;
+            
+            const content = '\uFEFF' + `AI 종합 분석 결과
+==========================================
+작성일: ${new Date().toLocaleString('ko-KR')}
+
+${state.aiAnalysisResult}
+
+==========================================
+※ 이 분석 결과는 AI가 생성한 것으로, 반드시 본인의 실제 경험과 비교하며 검증하세요.
+`;
+
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const dateStr = new Date().toISOString().split('T')[0];
+            a.download = `AI분석결과_${dateStr}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        loadFromStorage();
+        render();
+    </script>
+</body>
+</html>
